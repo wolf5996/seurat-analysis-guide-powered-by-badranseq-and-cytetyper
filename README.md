@@ -1,6 +1,8 @@
-# Seurat scRNA-seq Analysis, Powered by BadranSeq
+# Seurat scRNA-seq Analysis, Powered by BadranSeq & CyteTypeR
 
-**A complete PBMC3k single-cell RNA-seq walkthrough — every plot shown twice: Seurat default, then the BadranSeq alternative.**
+**The Seurat PBMC3k tutorial, rebuilt from scratch with publication-ready figures and automated cell-type annotation.**
+
+Seurat's default plots get the job done — but they don't belong in a paper. This guide runs the canonical PBMC3k pipeline end-to-end, then re-renders every visualization with [BadranSeq](https://github.com/wolf5996/BadranSeq): cell borders, vivid palettes, variance-annotated axes, and statistical overlays that actually tell you something. Cell-type annotation is handled twice — first manually with canonical markers, then automatically with [CyteTypeR](https://github.com/NygenAnalytics/CyteTypeR) — so you can see how far zero-effort annotation has come.
 
 ---
 
