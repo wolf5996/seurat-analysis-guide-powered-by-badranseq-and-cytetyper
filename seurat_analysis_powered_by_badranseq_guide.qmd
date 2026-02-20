@@ -1,0 +1,849 @@
+---
+title: "Seurat Analysis Powered by BadranSeq Guide"
+author: "Badran Elshenawy"
+date: today
+format:
+  html:
+    theme: darkly
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    code-tools: true
+    embed-resources: true
+    self-contained: true
+    title-block-banner: true
+engine: knitr
+execute:
+  eval: false
+  warning: false
+  message: false
+---
+
+## Context
+
+- This guide walks through a complete scRNA-seq analysis of the **PBMC3k** dataset using **Seurat**, with publication-ready visualizations powered by **BadranSeq**
+- Every visualization step provides a side-by-side comparison between Seurat defaults and BadranSeq alternatives via tabsets
+- The guide concludes with automated cell type annotation using **CyteTypeR**
+- Based on [Seurat's PBMC3k tutorial](https://satijalab.org/seurat/articles/pbmc3k_tutorial), improved with richer QC, enhanced plots, and automated annotation
+
+## Setup
+
+- **Data source**: PBMC3k dataset from `SeuratData` — 2,700 peripheral blood mononuclear cells sequenced on the 10X Genomics platform
+- **Loading method**: `SeuratData::LoadData()` returns a Seurat v5 object ready for processing
+- **BadranSeq**: Installed from GitHub via `devtools::install_github("wolf5996/BadranSeq")`
+
+```{r}
+#| label: setup
+
+# Libraries ----------
+
+library(Seurat)
+library(SeuratData)
+library(BadranSeq)
+library(tidyseurat)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(readr)
+
+# Install and load PBMC3k ----------
+
+InstallData("pbmc3k")
+pbmc <- LoadData("pbmc3k")
+pbmc
+```
+
+## Quality Control and Filtering
+
+Quality control identifies and removes low-quality cells that would confound downstream analysis. Three key metrics are assessed per cell:
+
+- **`nFeature_RNA`**: Number of detected genes per cell
+  - Cells with very few genes may be empty droplets or debris
+  - Cells with very high gene counts may be doublets (two cells captured together)
+- **`nCount_RNA`**: Total UMI counts per cell (library size)
+  - Correlates with `nFeature_RNA` but captures total sequencing depth
+- **`percent.mt`**: Percentage of reads mapping to mitochondrial genes
+  - High mitochondrial percentage indicates cell stress or lysis — cytoplasmic mRNA leaks out while mitochondrial mRNA is retained
+  - Calculated using `PercentageFeatureSet()` with the `^MT-` pattern for human genes
+
+### QC Metric Calculation
+
+```{r}
+#| label: qc-metrics
+
+# Libraries ----------
+
+library(Seurat)
+
+# Calculate mitochondrial percentage ----------
+
+pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+```
+
+### QC Visualization
+
+::: {.panel-tabset}
+#### Seurat Default
+
+```{r}
+#| label: qc-violin-seurat
+
+# Libraries ----------
+
+library(Seurat)
+
+# QC violin plots ----------
+
+VlnPlot(
+  pbmc,
+  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+  ncol = 3
+)
+```
+
+#### BadranSeq
+
+`do_StatsViolinPlot()` adds an omnibus Kruskal-Wallis test annotation by default. Since we have a single group here, `pairwise.display = "none"` suppresses pairwise comparisons.
+
+```{r}
+#| label: qc-violin-badranseq
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# QC violin plots with statistical annotations ----------
+
+do_StatsViolinPlot(
+  pbmc,
+  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+  pairwise.display = "none"
+)
+```
+:::
+
+### QC Histograms
+
+Histograms reveal the full distribution shape of each QC metric, making it easier to identify bimodal populations or long tails that violin plots can obscure. `fetch_cell_data()` extracts cell-level metadata into a tidy dataframe for flexible ggplot2 plotting.
+
+```{r}
+#| label: qc-histograms
+#| fig-width: 14
+#| fig-height: 4
+
+# Libraries ----------
+
+library(BadranSeq)
+library(ggplot2)
+library(patchwork)
+
+# Extract cell metadata ----------
+
+cell_data <- fetch_cell_data(pbmc)
+
+# Plot distributions with threshold lines ----------
+
+p1 <- ggplot(cell_data, aes(x = nFeature_RNA)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black", linewidth = 0.2) +
+  geom_vline(xintercept = c(200, 2500), linetype = "dashed", color = "red") +
+  labs(x = "Genes per Cell", y = "Count") +
+  theme_badranseq()
+
+p2 <- ggplot(cell_data, aes(x = nCount_RNA)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black", linewidth = 0.2) +
+  labs(x = "UMIs per Cell", y = "Count") +
+  theme_badranseq()
+
+p3 <- ggplot(cell_data, aes(x = percent.mt)) +
+  geom_histogram(bins = 50, fill = "steelblue", color = "black", linewidth = 0.2) +
+  geom_vline(xintercept = 5, linetype = "dashed", color = "red") +
+  labs(x = "Mitochondrial %", y = "Count") +
+  theme_badranseq()
+
+p1 | p2 | p3
+```
+
+| Threshold | Value | Rationale |
+|-----------|-------|-----------|
+| `nFeature_RNA` lower | 200 | Removes likely empty droplets with too few detected genes |
+| `nFeature_RNA` upper | 2500 | Removes likely doublets with abnormally high gene counts |
+| `percent.mt` upper | 5% | Removes stressed or lysed cells with excessive mitochondrial reads |
+
+### QC Scatter Plots
+
+Scatter plots show relationships between QC metrics. The correlation between `nCount_RNA` and `nFeature_RNA` should be positive — cells with more UMIs generally detect more genes. Outliers from this trend are suspect.
+
+```{r}
+#| label: qc-scatter
+#| fig-width: 12
+#| fig-height: 5
+
+# Libraries ----------
+
+library(Seurat)
+library(patchwork)
+
+# Feature scatter plots ----------
+
+plot1 <- FeatureScatter(pbmc, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(pbmc, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+
+plot1 | plot2
+```
+
+### Cell Filtering
+
+- **Filtering method**: `tidyseurat` + `dplyr::filter()` for readable syntax
+- **Thresholds**: Based on the distributions observed in QC histograms above
+
+```{r}
+#| label: filtering
+
+# Libraries ----------
+
+library(Seurat)
+library(tidyseurat)
+library(dplyr)
+
+# Filter cells ----------
+
+pbmc <- pbmc %>%
+  filter(
+    nFeature_RNA > 200,
+    nFeature_RNA < 2500,
+    percent.mt < 5
+  )
+
+pbmc
+```
+
+## Normalization
+
+- **Method**: Log-normalization via `NormalizeData()`
+  - Divides each cell's gene counts by the total counts for that cell
+  - Multiplies by a scale factor (10,000 by default) to bring values to a comparable range
+  - Log-transforms the result: `log1p(count / total * scale.factor)`
+- **Why log-normalization**: Compresses the dynamic range of expression values, reducing the influence of highly expressed genes and making variance more homogeneous across the expression range
+
+```{r}
+#| label: normalization
+
+# Libraries ----------
+
+library(Seurat)
+
+# Log-normalize ----------
+
+pbmc <- NormalizeData(
+  pbmc,
+  normalization.method = "LogNormalize",
+  scale.factor = 10000
+)
+```
+
+| Parameter | Value | Justification |
+|-----------|-------|---------------|
+| `normalization.method` | `"LogNormalize"` | Standard approach; log1p transformation stabilizes variance |
+| `scale.factor` | `10000` | Convention; scales counts to a common library size before log transform |
+
+## Variable Feature Selection
+
+- **Method**: Variance-stabilizing transformation (`vst`) via `FindVariableFeatures()`
+  - Models the mean-variance relationship of each gene across all cells
+  - Selects genes with the highest standardized variance — these are the most informative for distinguishing cell types
+- **`nfeatures = 2000`**: Standard default; captures sufficient biological signal while excluding noisy low-variance genes
+- **Purpose**: Downstream steps (PCA, clustering) operate on these genes only, reducing noise and computation
+
+```{r}
+#| label: variable-features
+
+# Libraries ----------
+
+library(Seurat)
+
+# Find variable features ----------
+
+pbmc <- FindVariableFeatures(
+  pbmc,
+  selection.method = "vst",
+  nfeatures = 2000
+)
+
+# Identify top 10 for labeling ----------
+
+top10 <- head(VariableFeatures(pbmc), 10)
+```
+
+### Variable Feature Plot
+
+```{r}
+#| label: variable-feature-plot
+#| fig-width: 10
+#| fig-height: 5
+
+# Libraries ----------
+
+library(Seurat)
+
+# Plot variable features ----------
+
+plot1 <- VariableFeaturePlot(pbmc)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+
+plot2
+```
+
+## Data Scaling
+
+- **Method**: `ScaleData()` centers and scales each gene across all cells
+  - **Centers**: Shifts mean expression of each gene to 0 — required for PCA to work correctly
+  - **Scales**: Normalizes variance of each gene to 1 — prevents highly expressed genes from dominating PCA
+- **Scope**: Applied to all genes so that downstream operations (e.g., heatmaps) can access scaled values for any gene, not just the variable features
+
+```{r}
+#| label: scaling
+
+# Libraries ----------
+
+library(Seurat)
+
+# Scale all genes ----------
+
+all.genes <- rownames(pbmc)
+
+pbmc <- ScaleData(pbmc, features = all.genes)
+```
+
+## Linear Dimensionality Reduction
+
+- **Method**: PCA via `RunPCA()` on the 2,000 variable features
+  - Reduces the high-dimensional gene expression space into principal components (PCs) ordered by variance explained
+  - Each PC captures a linear combination of genes representing a major axis of biological variation
+
+### PCA
+
+::: {.panel-tabset}
+#### Seurat Default
+
+```{r}
+#| label: pca-seurat
+
+# Libraries ----------
+
+library(Seurat)
+
+# Run PCA ----------
+
+pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
+
+# Inspect top genes per PC ----------
+
+print(pbmc[["pca"]], dims = 1:5, nfeatures = 5)
+```
+
+```{r}
+#| label: pca-viz-seurat
+#| fig-width: 8
+#| fig-height: 6
+
+# Libraries ----------
+
+library(Seurat)
+
+# PCA biplot ----------
+
+DimPlot(pbmc, reduction = "pca") + NoLegend()
+```
+
+#### BadranSeq
+
+`do_PcaPlot()` automatically annotates axes with the percentage of variance explained by each PC — information that Seurat's default `DimPlot` omits. Cell borders and cluster labels are enabled by default.
+
+```{r}
+#| label: pca-viz-badranseq
+#| fig-width: 8
+#| fig-height: 6
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# PCA with variance annotations ----------
+
+do_PcaPlot(pbmc)
+```
+:::
+
+### PCA Heatmaps
+
+`DimHeatmap()` shows the top genes driving each PC. Useful for identifying which biological processes each PC captures and for deciding how many PCs to include downstream.
+
+```{r}
+#| label: pca-heatmaps
+#| fig-width: 12
+#| fig-height: 16
+
+# Libraries ----------
+
+library(Seurat)
+
+# Heatmaps for PCs 1-15 ----------
+
+DimHeatmap(pbmc, dims = 1:15, cells = 500, balanced = TRUE)
+```
+
+### Dimensionality Selection
+
+Choosing the number of PCs to use downstream is critical — too few loses biological signal, too many introduces noise.
+
+::: {.panel-tabset}
+#### Seurat Default
+
+```{r}
+#| label: elbow-seurat
+#| fig-width: 8
+#| fig-height: 5
+
+# Libraries ----------
+
+library(Seurat)
+
+# Elbow plot ----------
+
+ElbowPlot(pbmc)
+```
+
+#### BadranSeq
+
+`EnhancedElbowPlot()` adds a red vertical cutoff line at the selected PC and displays variance explained on the y-axis, making the dimensionality choice explicit.
+
+```{r}
+#| label: elbow-badranseq
+#| fig-width: 8
+#| fig-height: 5
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# Enhanced elbow plot with cutoff ----------
+
+EnhancedElbowPlot(pbmc, ndims = 30, cutoff_pc = 10)
+```
+:::
+
+We select **10 PCs** for downstream analysis — the elbow plot shows diminishing variance explained beyond this point.
+
+## Clustering
+
+- **Graph construction**: `FindNeighbors()` builds a shared nearest-neighbor (SNN) graph in PCA space
+  - Each cell is connected to its K nearest neighbors based on Euclidean distance in PC space
+  - Edge weights reflect the overlap in local neighborhoods between pairs of cells
+- **Clustering algorithm**: `FindClusters()` applies the Louvain modularity optimization algorithm on the SNN graph
+  - **`resolution = 0.5`**: Controls cluster granularity — higher values produce more, smaller clusters; lower values produce fewer, broader clusters
+  - Resolution 0.5 is a reasonable starting point for datasets of ~3,000 cells
+
+```{r}
+#| label: clustering
+
+# Libraries ----------
+
+library(Seurat)
+
+# Build SNN graph ----------
+
+pbmc <- FindNeighbors(pbmc, dims = 1:10)
+
+# Cluster ----------
+
+pbmc <- FindClusters(pbmc, resolution = 0.5)
+
+# Inspect cluster assignments ----------
+
+head(Idents(pbmc), 5)
+```
+
+| Parameter | Value | Justification |
+|-----------|-------|---------------|
+| `dims` | `1:10` | First 10 PCs selected from elbow plot analysis |
+| `resolution` | `0.5` | Moderate granularity for ~3K cell dataset; yields 9 clusters matching known PBMC subtypes |
+
+## Non-Linear Dimensionality Reduction
+
+- **Method**: UMAP via `RunUMAP()` using the same 10 PCs as clustering
+  - Projects the high-dimensional PCA space into 2D for visualization
+  - Preserves local structure (similar cells stay close) while revealing global cluster separation
+- **Important**: UMAP coordinates are for visualization only — clustering is performed in PCA space, not UMAP space
+
+::: {.panel-tabset}
+### Seurat Default
+
+```{r}
+#| label: umap-seurat
+#| fig-width: 8
+#| fig-height: 6
+
+# Libraries ----------
+
+library(Seurat)
+
+# Run UMAP ----------
+
+pbmc <- RunUMAP(pbmc, dims = 1:10)
+
+# Plot ----------
+
+DimPlot(pbmc, reduction = "umap")
+```
+
+### BadranSeq
+
+`do_UmapPlot()` adds cell borders, cluster labels with white fill backgrounds, and uses `generate_badranseq_colors()` for a vivid categorical palette by default.
+
+```{r}
+#| label: umap-badranseq
+#| fig-width: 8
+#| fig-height: 6
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# UMAP with publication styling ----------
+
+do_UmapPlot(pbmc)
+```
+:::
+
+## Differential Expression Analysis
+
+- **Method**: `FindAllMarkers()` performs differential expression testing for each cluster against all other cells
+  - Default test: Wilcoxon rank-sum (non-parametric, robust to non-normality)
+  - `only.pos = TRUE`: Returns only upregulated markers — genes that define each cluster's identity
+- **Purpose**: Identifies marker genes that distinguish each cluster, enabling biological interpretation and cell type annotation
+
+### Cluster Markers
+
+```{r}
+#| label: find-markers
+
+# Libraries ----------
+
+library(Seurat)
+library(dplyr)
+
+# Find markers for all clusters ----------
+
+pbmc.markers <- FindAllMarkers(pbmc, only.pos = TRUE)
+
+# Top 2 markers per cluster ----------
+
+pbmc.markers %>%
+  group_by(cluster) %>%
+  dplyr::filter(avg_log2FC > 1) %>%
+  slice_head(n = 2) %>%
+  ungroup()
+```
+
+### Specific Cluster Comparisons
+
+```{r}
+#| label: specific-markers
+
+# Libraries ----------
+
+library(Seurat)
+
+# Cluster 2 vs all others ----------
+
+cluster2.markers <- FindMarkers(pbmc, ident.1 = 2)
+head(cluster2.markers, n = 5)
+
+# Cluster 5 vs clusters 0 and 3 ----------
+
+cluster5.markers <- FindMarkers(pbmc, ident.1 = 5, ident.2 = c(0, 3))
+head(cluster5.markers, n = 5)
+```
+
+### Marker Visualization
+
+::: {.panel-tabset}
+#### Seurat Default
+
+```{r}
+#| label: marker-feature-seurat
+#| fig-width: 12
+#| fig-height: 10
+
+# Libraries ----------
+
+library(Seurat)
+
+# Feature plots for canonical markers ----------
+
+FeaturePlot(
+  pbmc,
+  features = c(
+    "MS4A1", "GNLY", "CD3E", "CD14",
+    "FCER1A", "FCGR3A", "LYZ", "PPBP", "CD8A"
+  )
+)
+```
+
+#### BadranSeq
+
+`do_FeaturePlot()` uses viridis color scaling (palette B, magma) by default with cell borders. `order = TRUE` ensures high-expression cells are plotted on top.
+
+```{r}
+#| label: marker-feature-badranseq
+#| fig-width: 12
+#| fig-height: 10
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# Feature plots with viridis scaling ----------
+
+do_FeaturePlot(
+  pbmc,
+  features = c(
+    "MS4A1", "GNLY", "CD3E", "CD14",
+    "FCER1A", "FCGR3A", "LYZ", "PPBP", "CD8A"
+  )
+)
+```
+:::
+
+### Marker Violin Plots
+
+::: {.panel-tabset}
+#### Seurat Default
+
+```{r}
+#| label: marker-violin-seurat
+#| fig-width: 10
+#| fig-height: 5
+
+# Libraries ----------
+
+library(Seurat)
+
+# Violin plots for B cell and NK markers ----------
+
+VlnPlot(pbmc, features = c("MS4A1", "CD79A"))
+```
+
+#### BadranSeq
+
+`do_StatsViolinPlot()` overlays an omnibus Kruskal-Wallis test. `pairwise.display = "none"` shows only the global test statistic without cluttering with all pairwise comparisons.
+
+```{r}
+#| label: marker-violin-badranseq
+#| fig-width: 10
+#| fig-height: 5
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# Statistical violin plots ----------
+
+do_StatsViolinPlot(
+  pbmc,
+  features = c("MS4A1", "CD79A"),
+  pairwise.display = "none"
+)
+```
+:::
+
+### Marker Heatmap
+
+Top 10 markers per cluster displayed as a heatmap. Cells are grouped by cluster identity, revealing the expression signature of each population.
+
+```{r}
+#| label: marker-heatmap
+#| fig-width: 14
+#| fig-height: 10
+
+# Libraries ----------
+
+library(Seurat)
+library(dplyr)
+
+# Select top 10 markers per cluster ----------
+
+top10 <- pbmc.markers %>%
+  group_by(cluster) %>%
+  dplyr::filter(avg_log2FC > 1) %>%
+  slice_head(n = 10) %>%
+  ungroup()
+
+# Heatmap ----------
+
+DoHeatmap(pbmc, features = top10$gene) + NoLegend()
+```
+
+## Cell Type Annotation
+
+### Manual Annotation
+
+Cluster identities are assigned based on canonical marker gene expression. This requires prior knowledge of the expected cell types in the tissue.
+
+```{r}
+#| label: manual-annotation
+
+# Libraries ----------
+
+library(Seurat)
+
+# Assign cell type labels ----------
+
+new.cluster.ids <- c(
+  "Naive CD4 T",
+  "CD14+ Mono",
+  "Memory CD4 T",
+  "B",
+  "CD8 T",
+  "FCGR3A+ Mono",
+  "NK",
+  "DC",
+  "Platelet"
+)
+
+names(new.cluster.ids) <- levels(pbmc)
+pbmc <- RenameIdents(pbmc, new.cluster.ids)
+```
+
+::: {.panel-tabset}
+#### Seurat Default
+
+```{r}
+#| label: annotated-umap-seurat
+#| fig-width: 10
+#| fig-height: 7
+
+# Libraries ----------
+
+library(Seurat)
+library(ggplot2)
+
+# UMAP with cell type labels ----------
+
+DimPlot(
+  pbmc,
+  reduction = "umap",
+  label = TRUE,
+  pt.size = 0.5
+) + NoLegend()
+```
+
+#### BadranSeq
+
+```{r}
+#| label: annotated-umap-badranseq
+#| fig-width: 10
+#| fig-height: 7
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# UMAP with publication styling ----------
+
+do_UmapPlot(pbmc)
+```
+:::
+
+### Save Annotated Object
+
+```{r}
+#| label: save-annotated
+
+# Libraries ----------
+
+library(readr)
+
+# Outputs ----------
+
+write_rds(pbmc, "../checkpoints/pbmc_seu_annotated.rds")
+```
+
+### Automated Annotation with CyteTypeR
+
+[CyteTypeR](https://github.com/NygenAnalytics/CyteTypeR) is an API-driven tool for automated cell type annotation. It prepares cluster markers, aggregated metadata, and UMAP embeddings, then submits them to the CyteType API for annotation.
+
+- **What CyteTypeR returns**:
+  - Updated **Seurat object** with predicted cell type annotations in metadata
+  - **Interactive HTML report** with cluster-level visualizations and marker analysis
+- **Example report**: <https://nygen-labs-prod--cytetype-api.modal.run/report/34fac9e9-3c43-4c46-95f4-6b2994e57ada?cluster=7&tab=markers>
+
+#### Prepare Data for CyteTypeR
+
+- **`PrepareCyteTypeR()`** transforms the Seurat object and markers into the JSON structure expected by the CyteType API:
+  - **Cluster labels**: Mapping of cell indices to cluster identities
+  - **Aggregated metadata**: Per-cluster percentage breakdowns of each categorical metadata column
+  - **UMAP coordinates**: 2D embeddings for all cells
+  - **Top marker genes**: Top N genes per cluster ranked by differential expression significance
+
+```{r}
+#| label: prepare-cytetype
+
+# Libraries ----------
+
+library(CyteTypeR)
+
+# Prepare API payload ----------
+
+prepped_data <- PrepareCyteTypeR(
+  pbmc,
+  pbmc.markers,
+  n_top_genes = 10,
+  group_key = "seurat_clusters",
+  aggregate_metadata = TRUE,
+  coordinates_key = "umap"
+)
+
+# Report metadata ----------
+
+metadata <- list(
+  title = "PBMC3k Seurat Analysis Powered by BadranSeq",
+  run_label = "pbmc3k_analysis",
+  experiment_name = "pbmc3k_badranseq_guide"
+)
+```
+
+| Parameter | Value | Justification |
+|-----------|-------|---------------|
+| `n_top_genes` | `10` | Top 10 markers per cluster balances specificity with noise reduction |
+| `group_key` | `"seurat_clusters"` | Uses the Seurat-assigned cluster identities |
+| `aggregate_metadata` | `TRUE` | Computes per-cluster percentage breakdowns of metadata columns |
+| `coordinates_key` | `"umap"` | Sends UMAP embeddings for the interactive report visualization |
+
+#### Submit to CyteTypeR API
+
+- **`CyteTypeR()`** submits the prepared data and returns:
+  - Seurat object with predicted cell type labels added to metadata
+  - URL to an interactive HTML report
+
+```{r}
+#| label: run-cytetype
+
+# Libraries ----------
+
+library(CyteTypeR)
+
+# Submit to CyteTypeR API ----------
+
+pbmc_annotated <- CyteTypeR(
+  obj = pbmc,
+  prepped_data = prepped_data,
+  study_context = "PBMC3k dataset — 2,700 peripheral blood mononuclear cells from a healthy donor",
+  metadata = metadata
+)
+```
+
+| Parameter | Value | Justification |
+|-----------|-------|---------------|
+| `study_context` | Dataset description | Provides biological context to improve annotation accuracy |
+| `metadata` | Named list | Populates the interactive report header with title, run label, and experiment name |
