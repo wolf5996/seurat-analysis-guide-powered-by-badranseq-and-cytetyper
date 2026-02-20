@@ -1,3 +1,5 @@
 .Rproj.user
 _cache/
 *_files/
+*.html
+query.json

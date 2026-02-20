@@ -14,15 +14,18 @@ format:
     title-block-banner: true
 engine: knitr
 execute:
-  eval: false
+  eval: true
   warning: false
   message: false
+knitr:
+  opts_chunk:
+    fig.path: "../write/figures/"
 ---
 
 ## Context
 
 - This guide walks through a complete scRNA-seq analysis of the **PBMC3k** dataset using **Seurat**, with publication-ready visualizations powered by **BadranSeq**
-- Every visualization step provides a side-by-side comparison between Seurat defaults and BadranSeq alternatives via tabsets
+- Every visualization step shows the Seurat default followed by the BadranSeq alternative for direct comparison
 - The guide concludes with automated cell type annotation using **CyteTypeR**
 - Based on [Seurat's PBMC3k tutorial](https://satijalab.org/seurat/articles/pbmc3k_tutorial), improved with richer QC, enhanced plots, and automated annotation
 
@@ -82,7 +85,6 @@ pbmc[["percent.mt"]] <- PercentageFeatureSet(pbmc, pattern = "^MT-")
 
 ### QC Visualization
 
-::: {.panel-tabset}
 #### Seurat Default
 
 ```{r}
@@ -103,7 +105,7 @@ VlnPlot(
 
 #### BadranSeq
 
-`do_StatsViolinPlot()` adds an omnibus Kruskal-Wallis test annotation by default. Since we have a single group here, `pairwise.display = "none"` suppresses pairwise comparisons.
+`BadranSeq::do_ViolinPlot()` overlays a boxplot with median line and jittered points by default — a cleaner, more informative alternative to Seurat's `VlnPlot()`. Statistical comparisons via `BadranSeq::do_StatsViolinPlot()` are used later after clustering, when multiple groups exist.
 
 ```{r}
 #| label: qc-violin-badranseq
@@ -112,15 +114,13 @@ VlnPlot(
 
 library(BadranSeq)
 
-# QC violin plots with statistical annotations ----------
+# QC violin plots with boxplot overlay ----------
 
-do_StatsViolinPlot(
+BadranSeq::do_ViolinPlot(
   pbmc,
-  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
-  pairwise.display = "none"
+  features = c("nFeature_RNA", "nCount_RNA", "percent.mt")
 )
 ```
-:::
 
 ### QC Histograms
 
@@ -139,7 +139,7 @@ library(patchwork)
 
 # Extract cell metadata ----------
 
-cell_data <- fetch_cell_data(pbmc)
+cell_data <- BadranSeq::fetch_cell_data(pbmc)
 
 # Plot distributions with threshold lines ----------
 
@@ -147,18 +147,18 @@ p1 <- ggplot(cell_data, aes(x = nFeature_RNA)) +
   geom_histogram(bins = 50, fill = "steelblue", color = "black", linewidth = 0.2) +
   geom_vline(xintercept = c(200, 2500), linetype = "dashed", color = "red") +
   labs(x = "Genes per Cell", y = "Count") +
-  theme_badranseq()
+  BadranSeq::theme_badranseq()
 
 p2 <- ggplot(cell_data, aes(x = nCount_RNA)) +
   geom_histogram(bins = 50, fill = "steelblue", color = "black", linewidth = 0.2) +
   labs(x = "UMIs per Cell", y = "Count") +
-  theme_badranseq()
+  BadranSeq::theme_badranseq()
 
 p3 <- ggplot(cell_data, aes(x = percent.mt)) +
   geom_histogram(bins = 50, fill = "steelblue", color = "black", linewidth = 0.2) +
   geom_vline(xintercept = 5, linetype = "dashed", color = "red") +
   labs(x = "Mitochondrial %", y = "Count") +
-  theme_badranseq()
+  BadranSeq::theme_badranseq()
 
 p1 | p2 | p3
 ```
@@ -322,9 +322,6 @@ pbmc <- ScaleData(pbmc, features = all.genes)
 
 ### PCA
 
-::: {.panel-tabset}
-#### Seurat Default
-
 ```{r}
 #| label: pca-seurat
 
@@ -340,6 +337,8 @@ pbmc <- RunPCA(pbmc, features = VariableFeatures(object = pbmc))
 
 print(pbmc[["pca"]], dims = 1:5, nfeatures = 5)
 ```
+
+#### Seurat Default
 
 ```{r}
 #| label: pca-viz-seurat
@@ -357,7 +356,7 @@ DimPlot(pbmc, reduction = "pca") + NoLegend()
 
 #### BadranSeq
 
-`do_PcaPlot()` automatically annotates axes with the percentage of variance explained by each PC — information that Seurat's default `DimPlot` omits. Cell borders and cluster labels are enabled by default.
+`BadranSeq::do_PcaPlot()` automatically annotates axes with the percentage of variance explained by each PC — information that Seurat's default `DimPlot` omits. Cell borders and cluster labels are enabled by default.
 
 ```{r}
 #| label: pca-viz-badranseq
@@ -370,9 +369,8 @@ library(BadranSeq)
 
 # PCA with variance annotations ----------
 
-do_PcaPlot(pbmc)
+BadranSeq::do_PcaPlot(pbmc)
 ```
-:::
 
 ### PCA Heatmaps
 
@@ -396,7 +394,6 @@ DimHeatmap(pbmc, dims = 1:15, cells = 500, balanced = TRUE)
 
 Choosing the number of PCs to use downstream is critical — too few loses biological signal, too many introduces noise.
 
-::: {.panel-tabset}
 #### Seurat Default
 
 ```{r}
@@ -415,7 +412,7 @@ ElbowPlot(pbmc)
 
 #### BadranSeq
 
-`EnhancedElbowPlot()` adds a red vertical cutoff line at the selected PC and displays variance explained on the y-axis, making the dimensionality choice explicit.
+`BadranSeq::EnhancedElbowPlot()` adds a red vertical cutoff line at the selected PC and displays variance explained on the y-axis, making the dimensionality choice explicit.
 
 ```{r}
 #| label: elbow-badranseq
@@ -428,9 +425,8 @@ library(BadranSeq)
 
 # Enhanced elbow plot with cutoff ----------
 
-EnhancedElbowPlot(pbmc, ndims = 30, cutoff_pc = 10)
+BadranSeq::EnhancedElbowPlot(pbmc, ndims = 30, cutoff_pc = 10)
 ```
-:::
 
 We select **10 PCs** for downstream analysis — the elbow plot shows diminishing variance explained beyond this point.
 
@@ -475,7 +471,6 @@ head(Idents(pbmc), 5)
   - Preserves local structure (similar cells stay close) while revealing global cluster separation
 - **Important**: UMAP coordinates are for visualization only — clustering is performed in PCA space, not UMAP space
 
-::: {.panel-tabset}
 ### Seurat Default
 
 ```{r}
@@ -498,7 +493,7 @@ DimPlot(pbmc, reduction = "umap")
 
 ### BadranSeq
 
-`do_UmapPlot()` adds cell borders, cluster labels with white fill backgrounds, and uses `generate_badranseq_colors()` for a vivid categorical palette by default.
+`BadranSeq::do_UmapPlot()` adds cell borders, cluster labels with white fill backgrounds, and uses `generate_badranseq_colors()` for a vivid categorical palette by default.
 
 ```{r}
 #| label: umap-badranseq
@@ -511,9 +506,8 @@ library(BadranSeq)
 
 # UMAP with publication styling ----------
 
-do_UmapPlot(pbmc)
+BadranSeq::do_UmapPlot(pbmc)
 ```
-:::
 
 ## Differential Expression Analysis
 
@@ -543,6 +537,10 @@ pbmc.markers %>%
   dplyr::filter(avg_log2FC > 1) %>%
   slice_head(n = 2) %>%
   ungroup()
+
+# Outputs ----------
+
+readr::write_csv(pbmc.markers, "../write/tables/pbmc_all_markers.csv")
 ```
 
 ### Specific Cluster Comparisons
@@ -567,7 +565,6 @@ head(cluster5.markers, n = 5)
 
 ### Marker Visualization
 
-::: {.panel-tabset}
 #### Seurat Default
 
 ```{r}
@@ -592,7 +589,7 @@ FeaturePlot(
 
 #### BadranSeq
 
-`do_FeaturePlot()` uses viridis color scaling (palette B, magma) by default with cell borders. `order = TRUE` ensures high-expression cells are plotted on top.
+`BadranSeq::do_FeaturePlot()` uses viridis color scaling (palette B, magma) by default with cell borders. `order = TRUE` ensures high-expression cells are plotted on top.
 
 ```{r}
 #| label: marker-feature-badranseq
@@ -605,7 +602,7 @@ library(BadranSeq)
 
 # Feature plots with viridis scaling ----------
 
-do_FeaturePlot(
+BadranSeq::do_FeaturePlot(
   pbmc,
   features = c(
     "MS4A1", "GNLY", "CD3E", "CD14",
@@ -613,11 +610,9 @@ do_FeaturePlot(
   )
 )
 ```
-:::
 
 ### Marker Violin Plots
 
-::: {.panel-tabset}
 #### Seurat Default
 
 ```{r}
@@ -636,7 +631,7 @@ VlnPlot(pbmc, features = c("MS4A1", "CD79A"))
 
 #### BadranSeq
 
-`do_StatsViolinPlot()` overlays an omnibus Kruskal-Wallis test. `pairwise.display = "none"` shows only the global test statistic without cluttering with all pairwise comparisons.
+`BadranSeq::do_StatsViolinPlot()` overlays an omnibus Kruskal-Wallis test. `pairwise.display = "none"` shows only the global test statistic without cluttering with all pairwise comparisons.
 
 ```{r}
 #| label: marker-violin-badranseq
@@ -649,13 +644,12 @@ library(BadranSeq)
 
 # Statistical violin plots ----------
 
-do_StatsViolinPlot(
+BadranSeq::do_StatsViolinPlot(
   pbmc,
   features = c("MS4A1", "CD79A"),
   pairwise.display = "none"
 )
 ```
-:::
 
 ### Marker Heatmap
 
@@ -713,9 +707,12 @@ new.cluster.ids <- c(
 
 names(new.cluster.ids) <- levels(pbmc)
 pbmc <- RenameIdents(pbmc, new.cluster.ids)
+
+# Preserve manual annotations for later comparison ----------
+
+pbmc$manual_annotation <- Idents(pbmc)
 ```
 
-::: {.panel-tabset}
 #### Seurat Default
 
 ```{r}
@@ -751,9 +748,8 @@ library(BadranSeq)
 
 # UMAP with publication styling ----------
 
-do_UmapPlot(pbmc)
+BadranSeq::do_UmapPlot(pbmc)
 ```
-:::
 
 ### Save Annotated Object
 
@@ -847,3 +843,39 @@ pbmc_annotated <- CyteTypeR(
 |-----------|-------|---------------|
 | `study_context` | Dataset description | Provides biological context to improve annotation accuracy |
 | `metadata` | Named list | Populates the interactive report header with title, run label, and experiment name |
+
+### Annotation Comparison: Manual vs CyteTypeR
+
+How do the manual annotations (based on canonical markers and prior knowledge) compare to CyteTypeR's automated predictions? Side-by-side BadranSeq UMAP plots make the comparison straightforward.
+
+#### Manual Annotation
+
+```{r}
+#| label: annotation-comparison-manual
+#| fig-width: 10
+#| fig-height: 7
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# UMAP colored by manual annotations ----------
+
+BadranSeq::do_UmapPlot(pbmc_annotated, group.by = "manual_annotation")
+```
+
+#### CyteTypeR Annotation
+
+```{r}
+#| label: annotation-comparison-cytetype
+#| fig-width: 10
+#| fig-height: 7
+
+# Libraries ----------
+
+library(BadranSeq)
+
+# UMAP colored by CyteTypeR predictions ----------
+
+BadranSeq::do_UmapPlot(pbmc_annotated, group.by = "cytetype_seurat_clusters")
+```
