@@ -28,6 +28,32 @@ Every step that produces a figure renders it **twice** — once with the Seurat 
 
 ---
 
+## The Good Stuff
+
+**Annotated UMAP** — Cell type labels with white-fill backgrounds, cell borders, and a vivid categorical palette. This is `BadranSeq::do_UmapPlot()` doing what Seurat's `DimPlot()` wishes it could:
+
+<img src="readme_figures/annotated_umap_badranseq.png" alt="Annotated UMAP with BadranSeq" width="100%" />
+
+**Marker gene expression** — Nine canonical markers across PBMC clusters, viridis color scaling with cell borders. `BadranSeq::do_FeaturePlot()` replaces Seurat's `FeaturePlot()`:
+
+<img src="readme_figures/marker_features_badranseq.png" alt="Marker feature plots with BadranSeq" width="100%" />
+
+**Manual vs CyteTypeR annotation** — How do hand-curated labels compare to API-driven automated annotation? Two BadranSeq UMAPs make the comparison instant:
+
+*Manual annotation (canonical markers + prior knowledge):*
+
+<img src="readme_figures/annotation_manual.png" alt="Manual cell type annotation" width="100%" />
+
+*CyteTypeR automated annotation:*
+
+<img src="readme_figures/annotation_cytetype.png" alt="CyteTypeR automated annotation" width="100%" />
+
+**Statistical violin plots** — `BadranSeq::do_StatsViolinPlot()` overlays Kruskal-Wallis omnibus tests with median annotations and jittered points. No more naked violins:
+
+<img src="readme_figures/stats_violin_badranseq.png" alt="Statistical violin plots with BadranSeq" width="100%" />
+
+---
+
 ## Why BadranSeq?
 
 | Seurat Default | BadranSeq Replacement | Why Bother |
@@ -77,6 +103,7 @@ seurat_analysis_powered_by_badranseq/
 ├── read/              # Input data
 ├── scripts/           # Analysis code (git root)
 │   ├── seurat_analysis_powered_by_badranseq_guide.qmd
+│   ├── readme_figures/ # README showcase images
 │   └── scripts.Rproj
 ├── checkpoints/       # Intermediate .rds files
 └── write/
