@@ -1,8 +1,10 @@
 # Seurat scRNA-seq Analysis, Powered by BadranSeq & CyteTypeR
 
-**The Seurat PBMC3k tutorial, rebuilt from scratch with publication-ready figures and automated cell-type annotation.**
+**The Seurat PBMC3k tutorial, rebuilt with publication-ready figures and automated cell-type annotation.**
 
-Seurat's default plots get the job done — but they don't belong in a paper. This guide runs the canonical PBMC3k pipeline end-to-end, then re-renders every visualization with [BadranSeq](https://github.com/wolf5996/BadranSeq): cell borders, vivid palettes, variance-annotated axes, and statistical overlays that actually tell you something. Cell-type annotation is handled twice — first manually with canonical markers, then automatically with [CyteTypeR](https://github.com/NygenAnalytics/CyteTypeR) — so you can see how far zero-effort annotation has come.
+- Every visualization rendered **twice** — Seurat default, then the [BadranSeq](https://github.com/wolf5996/BadranSeq) alternative — so you can see the difference yourself
+- Cell-type annotation done **twice** — manually with canonical markers, then automatically with [CyteTypeR](https://github.com/NygenAnalytics/CyteTypeR) — zero effort, full comparison
+- Seurat's defaults get the job done. BadranSeq makes them belong in a paper.
 
 ---
 
@@ -21,21 +23,19 @@ PBMC3k Data                                                              Annotat
                                                                             do_ViolinPlot
 ```
 
-Every step that produces a figure renders it **twice** — once with the Seurat default, once with the BadranSeq replacement — so you can compare them side by side.
-
 ---
 
 ## The Good Stuff
 
-**Annotated UMAP** — Cell type labels with white-fill backgrounds, cell borders, and a vivid categorical palette. This is `BadranSeq::do_UmapPlot()` doing what Seurat's `DimPlot()` wishes it could:
+**Annotated UMAP** — cell borders, white-fill labels, vivid palette. `BadranSeq::do_UmapPlot()` doing what `DimPlot()` wishes it could:
 
 <img src="readme_figures/annotated_umap_badranseq.png" alt="Annotated UMAP with BadranSeq" width="100%" />
 
-**Marker gene expression** — Nine canonical markers across PBMC clusters, viridis color scaling with cell borders. `BadranSeq::do_FeaturePlot()` replaces Seurat's `FeaturePlot()`:
+**Marker gene expression** — nine canonical markers, viridis scaling, cell borders. `BadranSeq::do_FeaturePlot()`:
 
 <img src="readme_figures/marker_features_badranseq.png" alt="Marker feature plots with BadranSeq" width="100%" />
 
-**Manual vs CyteTypeR annotation** — How do hand-curated labels compare to API-driven automated annotation? Two BadranSeq UMAPs make the comparison instant:
+**Manual vs CyteTypeR annotation** — hand-curated labels vs API-driven predictions, side by side:
 
 *Manual annotation (canonical markers + prior knowledge):*
 
@@ -45,7 +45,7 @@ Every step that produces a figure renders it **twice** — once with the Seurat 
 
 <img src="readme_figures/annotation_cytetype.png" alt="CyteTypeR automated annotation" width="100%" />
 
-**Statistical violin plots** — `BadranSeq::do_StatsViolinPlot()` overlays Kruskal-Wallis omnibus tests with median annotations and jittered points. No more naked violins:
+**Statistical violin plots** — Kruskal-Wallis omnibus tests, median annotations, jittered points. No more naked violins:
 
 <img src="readme_figures/stats_violin_badranseq.png" alt="Statistical violin plots with BadranSeq" width="100%" />
 
@@ -53,42 +53,32 @@ Every step that produces a figure renders it **twice** — once with the Seurat 
 
 ## Why BadranSeq?
 
-| Seurat Default | BadranSeq Replacement | Why Bother |
+| Seurat Default | BadranSeq Replacement | What You Get |
 |---|---|---|
-| `DimPlot()` | `do_UmapPlot()` | Cell borders, automatic cluster labels, vivid colour palette |
-| `DimPlot(reduction = "pca")` | `do_PcaPlot()` | Auto variance-explained percentages on axes |
-| `FeaturePlot()` | `do_FeaturePlot()` | Viridis colour scaling, cell borders, cleaner layout |
+| `DimPlot()` | `do_UmapPlot()` | Cell borders, auto cluster labels, vivid palette |
+| `DimPlot(reduction = "pca")` | `do_PcaPlot()` | Variance-explained % on axes |
+| `FeaturePlot()` | `do_FeaturePlot()` | Viridis scaling, cell borders, cleaner layout |
 | `VlnPlot()` | `do_ViolinPlot()` | Boxplot overlay, median line, jittered points |
-| `ElbowPlot()` | `EnhancedElbowPlot()` | Cumulative variance explained, cutoff indicator line |
-| N/A | `fetch_cell_data()` | Tidy metadata extraction for custom ggplot2 QC histograms |
-| Manual `RenameIdents()` | **CyteTypeR** | API-driven automated cell-type annotation + interactive HTML report |
+| `ElbowPlot()` | `EnhancedElbowPlot()` | Variance explained %, cutoff line |
+| N/A | `fetch_cell_data()` | Tidy metadata for custom ggplot2 QC plots |
+| Manual `RenameIdents()` | **CyteTypeR** | Automated annotation + interactive report |
 
 ---
 
 ## Quick Start
 
-### 1. Install dependencies
-
 ```r
-# Install Seurat and SeuratData
-install.packages("Seurat")
-install.packages("remotes")
+# Dependencies
+install.packages(c("Seurat", "remotes"))
 remotes::install_github("satijalab/seurat-data")
-
-# Install BadranSeq
 remotes::install_github("wolf5996/BadranSeq")
-
-# Install CyteTypeR
 remotes::install_github("NygenAnalytics/CyteTypeR")
 ```
 
-### 2. Render the guide
-
 ```bash
+# Render
 quarto render seurat_analysis_powered_by_badranseq_guide.qmd
 ```
-
-The rendered HTML will appear in the same directory.
 
 ---
 
