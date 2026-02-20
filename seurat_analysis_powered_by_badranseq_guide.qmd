@@ -879,3 +879,19 @@ library(BadranSeq)
 
 BadranSeq::do_UmapPlot(pbmc_annotated, group.by = "cytetype_seurat_clusters")
 ```
+
+## Save Final Object
+
+The fully annotated Seurat object — with manual labels, CyteTypeR predictions, and all reductions intact — is saved as a compressed RDS for downstream use.
+
+```{r}
+#| label: save-final
+
+# Libraries ----------
+
+library(readr)
+
+# Outputs ----------
+
+write_rds(pbmc_annotated, "../checkpoints/pbmc3k_final.rds", compress = "gz")
+```

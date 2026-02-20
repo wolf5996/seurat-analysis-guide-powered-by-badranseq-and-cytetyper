@@ -130,7 +130,7 @@ seurat_analysis_powered_by_badranseq/
 | BadranSeq | <https://github.com/wolf5996/BadranSeq> |
 | CyteTypeR | <https://github.com/NygenAnalytics/CyteTypeR> |
 | Seurat PBMC3k Tutorial | <https://satijalab.org/seurat/articles/pbmc3k_tutorial> |
-| CyteTypeR Interactive Report | [View Report](https://nygen-labs-prod--cytetype-api.modal.run/report/35259c0e-5d4d-47a1-a128-69861ba5d08c) |
+| CyteTypeR Interactive Report | [View Report](https://nygen-labs-prod--cytetype-api.modal.run/report/34fac9e9-3c43-4c46-95f4-6b2994e57ada) |
 
 ---
 
