@@ -2,11 +2,6 @@
 
 **A complete PBMC3k single-cell RNA-seq walkthrough — every plot shown twice: Seurat default, then the BadranSeq alternative.**
 
-> **TL;DR** — Follow the canonical Seurat PBMC3k tutorial from raw counts to annotated clusters.
-> At every visualisation step, compare Seurat's built-in plots against BadranSeq replacements
-> (better palettes, cell borders, axis labels that actually mean something).
-> Cell-type annotation is handled automatically by CyteTypeR, then compared head-to-head with manual labels.
-
 ---
 
 ## Pipeline Overview
